@@ -10,7 +10,7 @@ from .g1_low_vision_cfg import G1VisionRoughEnvCfg, G1VisionRoughEnvCfg_PLAY, G1
 
 gym.register(
     id="g1_base",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": G1BaseRoughEnvCfg,
@@ -21,7 +21,7 @@ gym.register(
 
 gym.register(
     id="g1_base_play",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": G1BaseRoughEnvCfg,
@@ -32,7 +32,7 @@ gym.register(
 
 gym.register(
     id="g1_vision",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": G1VisionRoughEnvCfg,
@@ -43,7 +43,7 @@ gym.register(
 
 gym.register(
     id="g1_vision_play",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": G1VisionRoughEnvCfg_PLAY,

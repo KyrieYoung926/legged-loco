@@ -14,7 +14,7 @@ import math
 import torch
 import numpy as np
 
-from omni.isaac.lab.app import AppLauncher
+from isaaclab.app import AppLauncher
 
 # local imports
 import cli_args  # isort: skip
@@ -48,19 +48,19 @@ simulation_app = app_launcher.app
 
 from rsl_rl.runners import OnPolicyRunner
 
-import omni.isaac.lab_tasks  # noqa: F401
-from omni.isaac.lab_tasks.utils import get_checkpoint_path, parse_env_cfg
-from omni.isaac.lab_tasks.utils.wrappers.rsl_rl import (
+import isaaclab_tasks  # noqa: F401
+from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
+from isaaclab_rl.rsl_rl import (
     RslRlOnPolicyRunnerCfg,
     RslRlVecEnvWrapper,
 )
 
 from omni.isaac.leggedloco.config import *
-from omni.isaac.lab.devices.keyboard import Se2Keyboard
+from isaaclab.devices.keyboard import Se2Keyboard
 from omni.isaac.leggedloco.utils import RslRlVecEnvHistoryWrapper
 
-import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
+import isaaclab.sim as sim_utils
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
 from utils import quat2eulers
 

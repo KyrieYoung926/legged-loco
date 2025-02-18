@@ -9,7 +9,7 @@ from .go2_low_vision_cfg import Go2VisionRoughEnvCfg, Go2VisionRoughEnvCfg_PLAY,
 
 gym.register(
     id="go2_base",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": Go2BaseRoughEnvCfg,
@@ -20,7 +20,7 @@ gym.register(
 
 gym.register(
     id="go2_base_play",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": Go2BaseRoughEnvCfg_PLAY,
@@ -30,7 +30,7 @@ gym.register(
 
 gym.register(
     id="go2_vision",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": Go2VisionRoughEnvCfg,
@@ -40,7 +40,7 @@ gym.register(
 
 gym.register(
     id="go2_vision_play",
-    entry_point="omni.isaac.lab.envs:ManagerBasedRLEnv",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": Go2VisionRoughEnvCfg_PLAY,
