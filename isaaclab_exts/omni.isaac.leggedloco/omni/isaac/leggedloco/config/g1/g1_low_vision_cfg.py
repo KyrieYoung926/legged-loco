@@ -198,41 +198,41 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     slope_threshold=0.75,
     use_cache=False,
     sub_terrains={
-        "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-            proportion=0.2,
-            step_height_range=(0.05, 0.2),
-            step_width=0.3,
-            platform_width=3.0,
-            border_width=1.0,
-            holes=False,
-        ),
-        "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
-            proportion=0.2,
-            step_height_range=(0.05, 0.2),
-            step_width=0.3,
-            platform_width=3.0,
-            border_width=1.0,
-            holes=False,
-        ),
+        # "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
+        #     proportion=0.2,
+        #     step_height_range=(0.05, 0.2),
+        #     step_width=0.3,
+        #     platform_width=3.0,
+        #     border_width=1.0,
+        #     holes=False,
+        # ),
+        # "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
+        #     proportion=0.2,
+        #     step_height_range=(0.05, 0.2),
+        #     step_width=0.3,
+        #     platform_width=3.0,
+        #     border_width=1.0,
+        #     holes=False,
+        # ),
         # "boxes": terrain_gen.MeshRandomGridTerrainCfg(
         #     proportion=0.2, grid_width=0.45, grid_height_range=(0.05, 0.1), platform_width=2.0
         # ),
-        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.2, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
-        ),
-        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
-        ),
-        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
-        ),
-        # "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
-        #     proportion=1.0, 
-        #     num_obstacles=10,
-        #     obstacle_height_mode="choice",
-        #     obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
-        #     platform_width=2.0
+        # "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
+        #     proportion=0.2, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
         # ),
+        # "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+        #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
+        # ),
+        # "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+        #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
+        # ),
+        "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
+            proportion=1.0, 
+            num_obstacles=10,
+            obstacle_height_mode="choice",
+            obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
+            platform_width=2.0
+        ),
     },
 )
 
@@ -270,8 +270,8 @@ class TrainSceneCfg(InteractiveSceneCfg):
         debug_vis=False,
     )
     # robots
-    # robot = G1_MINIMAL_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    robot = G1_NO_ARMS_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot = G1_MINIMAL_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # robot = G1_NO_ARMS_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     # sensors
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, debug_vis=False)
     # lights
@@ -295,7 +295,23 @@ class TrainSceneCfg(InteractiveSceneCfg):
     height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/torso_link"
     # camera
     lidar_sensor = None
-
+    lidar_sensor = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/pelvis",
+        mesh_prim_paths=["/World/ground"],
+        update_period=0.1,
+        attach_yaw_only=False,
+        # offset=RayCasterCameraCfg.OffsetCfg(pos=(0.60, 0.0, 0.0), rot=(-0.5, 0.5, -0.5, 0.5)),
+        # offset=RayCasterCameraCfg.OffsetCfg(pos=(0.00, 0.0, 0.3), rot=(0.579, -0.579, 0.406, -0.406)),
+        offset=RayCasterCfg.OffsetCfg(pos=(0.047, 0.0, 0.400), rot=(-0.119, 0.0,0.993,0.0)),
+        # data_types=["distance_to_image_plane"],
+        debug_vis=False,
+        pattern_cfg=patterns.BpearlPatternCfg(
+            vertical_ray_angles=[
+                 51.125, 48.0, 45.0, 42.0, 39.0, 36, 33, 30,27,24,20,17,14,11,8,5,2, -1
+    ]
+        ),
+        max_distance=5,
+    )
     depth_sensor = None
     depth_sensor = RayCasterCameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/pelvis",
@@ -340,16 +356,16 @@ class ObservationsCfg:
         #     params={"sensor_cfg": SceneEntityCfg("height_scanner")},
         #     clip=(-1.0, 1.0),
         # )
-        # lidar_measurement = ObsTerm(
-        #     func=mdp.process_lidar,
-        #     params={"sensor_cfg": SceneEntityCfg("lidar_sensor")},
-        #     noise=Unoise(n_min=-0.1, n_max=0.1)
-        # )
-        realsense_depth_measurement = ObsTerm(
-            func=mdp.process_depth_image,
-            params={"sensor_cfg": SceneEntityCfg("depth_sensor"), "data_type": "distance_to_image_plane"},
-            noise=Unoise(n_min=-0.1, n_max=0.1),
+        lidar_measurement = ObsTerm(
+            func=mdp.process_lidar,
+            params={"sensor_cfg": SceneEntityCfg("lidar_sensor")},
+            noise=Unoise(n_min=-0.1, n_max=0.1)
         )
+        # realsense_depth_measurement = ObsTerm(
+        #     func=mdp.process_depth_image,
+        #     params={"sensor_cfg": SceneEntityCfg("depth_sensor"), "data_type": "distance_to_image_plane"},
+        #     noise=Unoise(n_min=-0.1, n_max=0.1),
+        # )
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -665,8 +681,8 @@ class G1VisionRoughEnvCfg(ManagerBasedRLEnvCfg):
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
     # rewards: RewardsCfg = G1Rewards()
-    rewards: RewardsCfg = G1NoArmsRewardsCfg()
-    # rewards: RewardsCfg = CustomG1Rewards()
+    #rewards: RewardsCfg = G1NoArmsRewardsCfg()
+    rewards: RewardsCfg = CustomG1Rewards()
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventCfg = EventCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
@@ -762,8 +778,8 @@ class G1VisionRoughEnvCfg_PLAY(G1VisionRoughEnvCfg):
             self.scene.terrain.terrain_generator.num_rows = 5
             self.scene.terrain.terrain_generator.num_cols = 5
             self.scene.terrain.terrain_generator.curriculum = False
-            self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range = (0.17, 0.17)
-            self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.17, 0.17)
+            # self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range = (0.17, 0.17)
+            # self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.17, 0.17)
 
         self.commands.base_velocity.ranges.lin_vel_x = (0.5, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
