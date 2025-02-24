@@ -29,17 +29,11 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
 
 if __name__ == "__main__":
     # get config file name from command line
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config_file", type=str, help="config file name in the config folder")
-    args = parser.parse_args()
-    config_file = args.config_file
-    with open(f"/home/xunyang/Desktop/Projects/unitree_rl_gym/deploy/deploy_mujoco/configs/g1.yaml", "r") as f:
+    config_file = "/home/xunyang/Desktop/Projects/legged-loco/scripts/g1.yaml"
+    with open(config_file, "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-        policy_path = config["policy_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
-        xml_path = config["xml_path"].replace("{LEGGED_GYM_ROOT_DIR}", LEGGED_GYM_ROOT_DIR)
-
+        policy_path = config["policy_path"]
+        xml_path = config["xml_path"]
         simulation_duration = config["simulation_duration"]
         simulation_dt = config["simulation_dt"]
         control_decimation = config["control_decimation"]
@@ -63,9 +57,11 @@ if __name__ == "__main__":
     # define context variables
     action = np.zeros(num_actions, dtype=np.float32)
     target_dof_pos = default_angles.copy()
-    obs = np.zeros(num_obs, dtype=np.float32)
-
+    policy_obs = np.zeros(771, dtype=np.float32)
+    critic_obs = np.zeros(310, dtype=np.float32)
+    proprio_obs = np.zeros(123, dtype=np.float32)
     counter = 0
+    history_proprio_obs = torch.zeros(9, 123, dtype=torch.float)
 
     # Load robot model
     m = mujoco.MjModel.from_xml_path(xml_path)
@@ -94,6 +90,7 @@ if __name__ == "__main__":
                 qj = d.qpos[7:]
                 dqj = d.qvel[6:]
                 quat = d.qpos[3:7]
+                vel = d.qvel[:3]
                 omega = d.qvel[3:6]
 
                 qj = (qj - default_angles) * dof_pos_scale
@@ -103,18 +100,46 @@ if __name__ == "__main__":
 
                 period = 0.8
                 count = counter * simulation_dt
-                phase = count % period / period
-                sin_phase = np.sin(2 * np.pi * phase)
-                cos_phase = np.cos(2 * np.pi * phase)
 
-                obs[:3] = omega
-                obs[3:6] = gravity_orientation
-                obs[6:9] = cmd * cmd_scale
-                obs[9 : 9 + num_actions] = qj
-                obs[9 + num_actions : 9 + 2 * num_actions] = dqj
-                obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action
-                obs[9 + 3 * num_actions : 9 + 3 * num_actions + 2] = np.array([sin_phase, cos_phase])
-                obs_tensor = torch.from_numpy(obs).unsqueeze(0)
+                # height_scan = np.zeros(187, dtype=np.float32)
+                lidar_measurement = np.zeros(648, dtype=np.float32)
+
+                # policy observation
+                policy_obs[:3] = vel
+                policy_obs[3:6] = omega
+                policy_obs[6:9] = gravity_orientation
+                policy_obs[9:12] = cmd * cmd_scale
+                policy_obs[9 : 9 + num_actions] = qj
+                policy_obs[9 + num_actions : 9 + 2 * num_actions] = dqj
+                policy_obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action
+                policy_obs[9 + 3 * num_actions : 9 + 3 * num_actions + 648] = lidar_measurement # 771
+
+                # proprio observation
+                proprio_obs[:3] = vel
+                proprio_obs[3:6] = omega
+                proprio_obs[6:9] = gravity_orientation
+                proprio_obs[9:12] = cmd * cmd_scale
+                proprio_obs[9 : 9 + num_actions] = qj
+                proprio_obs[9 + num_actions : 9 + 2 * num_actions] = dqj
+                proprio_obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action # 123
+
+                # # critic observation
+                # critic_obs[:3] = vel
+                # critic_obs[3:6] = omega
+                # critic_obs[6:9] = gravity_orientation
+                # critic_obs[9:12] = cmd * cmd_scale
+                # critic_obs[9 : 9 + num_actions] = qj
+                # critic_obs[9 + num_actions : 9 + 2 * num_actions] = dqj
+                # critic_obs[9 + 2 * num_actions : 9 + 3 * num_actions] = action
+                # critic_obs[9 + 3 * num_actions : 9 + 3 * num_actions + 187] = height_scan # 310
+
+
+                
+                history_proprio_obs = torch.roll(history_proprio_obs, shifts=-1, dims=0)
+                history_proprio_obs[-1, :] = torch.from_numpy(proprio_obs)
+
+                obs_buf = np.concatenate((policy_obs, history_proprio_obs.numpy().flatten()))
+                obs_tensor = torch.from_numpy(obs_buf).unsqueeze(0)
                 # policy inference
                 action = policy(obs_tensor).detach().numpy().squeeze()
                 # transform action to target_dof_pos
