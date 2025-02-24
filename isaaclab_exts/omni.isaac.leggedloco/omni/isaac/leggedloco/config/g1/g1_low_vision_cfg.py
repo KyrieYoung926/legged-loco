@@ -524,21 +524,21 @@ class EventCfg:
     #     params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     # )
 
-    reset_depth_sensor = EventTerm(
-        func=mdp.reset_camera_pos_uniform,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("depth_sensor"),
-            "pose_delta_range": {
-                "x": (-0.01, 0.01),
-                "y": (-0.01, 0.01),
-                "z": (-0.02, 0.02),
-                "roll": (-0.1, 0.1),
-                "pitch": (-0.1, 0.1),
-                "yaw": (-0.1, 0.1),
-            },
-        }
-    )
+    # reset_depth_sensor = EventTerm(
+    #     func=mdp.reset_camera_pos_uniform,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("depth_sensor"),
+    #         "pose_delta_range": {
+    #             "x": (-0.01, 0.01),
+    #             "y": (-0.01, 0.01),
+    #             "z": (-0.02, 0.02),
+    #             "roll": (-0.1, 0.1),
+    #             "pitch": (-0.1, 0.1),
+    #             "yaw": (-0.1, 0.1),
+    #         },
+    #     }
+    # )
 
 
 ##
@@ -634,12 +634,43 @@ class CustomG1Rewards(G1Rewards):
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*ankle_roll_link"),
         },
     )
+    base_height = RewTerm(
+        func=mdp.base_height_l2,
+        weight=-5.0,
+        params={"target_height": 0.76},
+    )    
+    stand_still_penalty = RewTerm(
+        func=mdp.stand_still_penalty,
+        weight=-1.0,
+        params={
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])
+        },
+    )
+    action_smoothness = RewTerm(
+        func=mdp.action_smoothness_penalty,
+        weight=-0.02,
+    )
+    joint_power = RewTerm(
+        func=mdp.power_penalty,
+        weight=-2e-5,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*")},
+    )
 
-
-
+    collision = RewTerm(
+        func=mdp.collision_penalty,
+        weight=-5.0,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_elbow_.*", ".*_shoulder_.*"]),
+            "threshold": 0.1,
+        },
+    )
+    
 ##
 # Commands
 ##
+
+
 @configclass
 class CommandsCfg:
     """Command specifications for the MDP."""
@@ -667,6 +698,7 @@ class TerminationsCfg:
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*torso_link"), "threshold": 1.0},
     )
+
 
 
 @configclass
@@ -719,6 +751,8 @@ class G1VisionRoughEnvCfg(ManagerBasedRLEnvCfg):
         }
 
         # Rewards
+        self.rewards.feet_air_time.weight = 0.18
+        self.rewards.joint_deviation_hip.weight = -0.2
         self.rewards.lin_vel_z_l2.weight = 0.0
         self.rewards.undesired_contacts = None
         self.rewards.flat_orientation_l2.weight = -1.0
