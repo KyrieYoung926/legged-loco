@@ -1,13 +1,13 @@
 # 
 policy_path: "/home/xunyang/Desktop/Projects/legged-loco/logs/rsl_rl/g1_vision_rough/2025-02-24_09-06-10_g1-re/exported/policy.jit"
-xml_path: "/home/xunyang/Desktop/Projects/legged-loco/assets/robots/g1/g1_minimal.xml"
+xml_path: "/home/xunyang/Desktop/Projects/legged-loco/assets/robots/g1/g1_minimal_terrain.xml"
 
 # Total simulation time
 simulation_duration: 60.0
 # Simulation time step
-simulation_dt: 0.002
+simulation_dt: 0.005
 # Controller update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
-control_decimation: 10
+control_decimation: 4
 
 kps: [
     200, 200, 150, 200, 200, 200,  # left_ankle_pitch, left_ankle_roll, left_elbow_pitch, left_elbow_roll, left_five, left_four
