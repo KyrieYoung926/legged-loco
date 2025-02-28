@@ -145,7 +145,9 @@ def process_lidar(env: BaseEnv, sensor_cfg: SceneEntityCfg, offset: float = 0.5)
     output[torch.isinf(output)] = far_clip
     output = torch.clip(output, near_clip, far_clip)
     output = (output - near_clip) / (far_clip - near_clip)  - 0.5
-    return output.reshape(env.num_envs, -1)
+    temp = output.reshape(env.num_envs, -1)
+    temp_zeros = torch.zeros_like(temp)
+    return temp_zeros
 
 
 def cam_int_matrix(env: BaseEnv, sensor_cfg: SceneEntityCfg) -> torch.Tensor:

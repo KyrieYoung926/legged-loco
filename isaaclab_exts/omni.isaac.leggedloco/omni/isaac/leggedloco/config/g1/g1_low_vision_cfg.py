@@ -228,9 +228,9 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         # ),
         "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
             proportion=1.0, 
-            num_obstacles=10,
+            num_obstacles=1,
             obstacle_height_mode="choice",
-            obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
+            obstacle_height_range=(0.10, 0.20), obstacle_width_range=(0.1, 0.2), 
             platform_width=2.0
         ),
     },
@@ -248,7 +248,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
 @configclass
 class TrainSceneCfg(InteractiveSceneCfg):
     """Configuration for the terrain scene with a legged robot."""
-
+    # terrain = AssetBaseCfg(prim_path="/World/defaultGroundPlane", spawn=sim_utils.GroundPlaneCfg())
     # ground terrain
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",

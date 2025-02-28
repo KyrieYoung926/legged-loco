@@ -8,6 +8,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import numpy as np
 import subprocess
 
 from isaaclab.app import AppLauncher
