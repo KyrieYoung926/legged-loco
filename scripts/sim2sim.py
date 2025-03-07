@@ -25,43 +25,9 @@ def get_gravity_orientation(quaternion):
 
 def pd_control(target_q, q, kp, target_dq, dq, kd):
     """Calculates torques from position commands"""
-    return (target_q - q) * kp + (target_dq - dq) * kd
-
-def get_lidar_data(d):
-    mesh_path = "/home/xunyang/Desktop/Projects/legged-loco/meshes/terrain.obj"
-    obstacle_mesh = trimesh.load(mesh_path)
-    translation = trimesh.transformations.translation_matrix([x, y, z])
-    obstacle_mesh.apply_transform(translation)
-    vertices = obstacle_mesh.vertices  # (N, 3)
-    triangles = obstacle_mesh.faces    # (M, 3)
-
-    vertex_tensor = torch.tensor(vertices, device=self.device, dtype=torch.float32)
-    faces_tensor = torch.tensor(triangles.flatten(), dtype=torch.int32, device=self.device)
-
-    vertex_wp = wp.from_torch(vertex_tensor, dtype=wp.vec3)
-    faces_wp = wp.from_tensor(faces_tensor, dtype=wp.int32)
-
-    wp_mesh = wp.Mesh(points=vertex_wp, indices=faces_wp)
-    combined_mesh = trimesh.util.concatenate([obstacle_mesh, terrain_mesh])
-    ray_vectors = torch.zeros((num_scan_lines, num_points, 3))
-    # 计算每个射线的方位角和俯仰角
-    for i in range(num_scan_lines):
-        for j in range(num_points):
-            azimuth = horizontal_fov_min + j * (horizontal_fov / num_points)
-            elevation = vertical_fov_min + i * (vertical_fov / num_scan_lines)
-            ray_vectors[i,j] = [cos(azimuth)*cos(elevation), 
-                            sin(azimuth)*cos(elevation), 
-                            sin(elevation)]
-    # 在Warp Kernel中计算
-    wp.launch(
-        kernel=lidar_raycast_kernel,
-        dim=(num_envs, num_scan_lines, num_points),
-        inputs=[wp_mesh.id, ray_origins, ray_vectors, max_distance],
-        outputs=[distances]
-    )
-    self.local_dist = wp.to_torch(distances)  # 形状：(num_envs, num_scan_lines, num_points)
-    lidar_obs = torch.log2(self.local_dist + 1) * self.obs_scales.lidar
-    self.obs_buf = torch.cat([self.obs_buf, lidar_obs], dim=-1)
+    pp = (target_q - q) * kp
+    dd = (target_dq - dq) * kd
+    return pp + dd
 
 def load_joint_config(joint_config_path):
     with open(joint_config_path, "r") as f:
@@ -71,67 +37,153 @@ def load_joint_config(joint_config_path):
         default_angles = np.array(config["default_angles"], dtype=np.float32)
     return kps, kds, default_angles
 
-def get_obs(data, simcfg, proprio_obs_buf):
 
+
+def reindex_data(data):
+    reindexed_data = [
+        data[0],
+        data[6],
+        data[12],
+        data[1],
+        data[7],
+        data[13],
+        data[25],
+        data[2],
+        data[8],
+        data[14],
+        data[26],
+        data[3],
+        data[9],
+        data[15],
+        data[27],
+        data[4],
+        data[10],
+        data[16],
+        data[28],
+        data[5],
+        data[11],
+        data[17],
+        data[29],
+        data[18],
+        data[20],
+        data[22],
+        data[30],
+        data[32],
+        data[34],
+        data[19],
+        data[21],
+        data[23],
+        data[31],
+        data[33],
+        data[35],
+        data[24],
+        data[36],
+        
+    ]
+    return reindexed_data
+
+def get_obs(d, simcfg, proprio_obs_buf, history_proprio_obs, action, policy_obs, proprio_obs):
     # create observation
-    qj = data.qpos[7:]
-    dqj = data.qvel[6:]
-    quat = data.qpos[3:7]
-    vel = data.qvel[:3]
-    omega = data.qvel[3:6]
-    qj_rel = qj - simcfg.default_angles
-    gravity_orientation = get_gravity_orientation(quat)
+    base_vel, base_omega, joint_pos, joint_vel, base_quat = get_from_mjdata(d)
+
+    joint_pos_rel = joint_pos - simcfg.default_angles
+
+    gravity_orientation = get_gravity_orientation(base_quat)
     lidar_measurement = np.zeros(648, dtype=np.float32)  
 
     # policy observation
-    policy_obs[:3] = vel
-    policy_obs[3:6] = omega
+    policy_obs[:3] = base_vel
+    policy_obs[3:6] = base_omega
     policy_obs[6:9] = gravity_orientation
     policy_obs[9:12] = simcfg.cmd
-    policy_obs[9 : 9 + simcfg.num_actions] = qj_rel
-    policy_obs[9 + simcfg.num_actions : 9 + 2 * simcfg.num_actions] = dqj
-    policy_obs[9 + 2 * simcfg.num_actions : 9 + 3 * simcfg.num_actions] = action 
-    policy_obs[9 + 3 * simcfg.num_actions : 9 + 3 * simcfg.num_actions + 648] = lidar_measurement # 771
+    policy_obs[12 : 12 + simcfg.num_actions] = joint_pos_rel
+    policy_obs[12 + simcfg.num_actions : 12 + 2 * simcfg.num_actions] = joint_vel
+    policy_obs[12 + 2 * simcfg.num_actions : 12 + 3 * simcfg.num_actions] = action 
+    policy_obs[12 + 3 * simcfg.num_actions : 12 + 3 * simcfg.num_actions + 648] = lidar_measurement # 771
     policy_obs_tensor = torch.from_numpy(policy_obs).float()
     
     # proprio observation
-    proprio_obs[:3] = vel
-    proprio_obs[3:6] = omega
+    proprio_obs[:3] = base_vel
+    proprio_obs[3:6] = base_omega
     proprio_obs[6:9] = gravity_orientation
     proprio_obs[9:12] = simcfg.cmd
-    proprio_obs[9 : 9 + simcfg.num_actions] = qj_rel
-    proprio_obs[9 + simcfg.num_actions : 9 + 2 * simcfg.num_actions] = dqj
-    proprio_obs[9 + 2 * simcfg.num_actions : 9 + 3 * simcfg.num_actions] = action 
+    proprio_obs[12 : 12 + simcfg.num_actions] = joint_pos_rel
+    proprio_obs[12 + simcfg.num_actions : 12 + 2 * simcfg.num_actions] = joint_vel
+    proprio_obs[12 + 2 * simcfg.num_actions : 12 + 3 * simcfg.num_actions] = action 
     proprio_obs_tensor = torch.from_numpy(proprio_obs).float()
 
     # Update proprio_obs buffer
     proprio_obs_buf = torch.roll(proprio_obs_buf, shifts=-1, dims=0)
-    proprio_obs_buf[simcfg.history_length-1, :] = proprio_obs_tensor
+    proprio_obs_buf = torch.cat([proprio_obs_buf[:-1], proprio_obs_tensor.unsqueeze(0)], dim=0)
 
     # Concatenate current observation
-    proprio_obs_history = proprio_obs_buf.view(-1)
-    obs = torch.cat([policy_obs_tensor, proprio_obs_history], dim=0)
-    # history_proprio_obs = torch.roll(history_proprio_obs, shifts=-1, dims=0)
-    # history_proprio_obs[-1, :] = torch.from_numpy(proprio_obs)
+    history_proprio_obs = proprio_obs_buf.view(-1)
+    obs = torch.cat([policy_obs_tensor, history_proprio_obs], dim=0)
 
-    # obs_buf = np.concatenate((policy_obs, history_proprio_obs.numpy().flatten()))
-    # obs_tensor = torch.from_numpy(obs_buf).unsqueeze(0)
-    # policy inference
-    return obs, proprio_obs_buf
+    return policy_obs_tensor, proprio_obs_buf, history_proprio_obs
+
+def get_from_mjdata(data):
+    base_vel = data.qvel[:3]
+    base_omega = data.qvel[3:6]
+    joint_pos = reindex_data(data.qpos[7:])
+    joint_vel = reindex_data(data.qvel[6:])
+    base_quat = data.qpos[3:7]
+    return base_vel, base_omega, joint_pos, joint_vel, base_quat
+
+def get_init_obs(d, simcfg, proprio_obs_buf, history_proprio_obs, action, policy_obs, proprio_obs):
+    # create observation
+    base_vel, base_omega, joint_pos, joint_vel, base_quat = get_from_mjdata(d)
+
+    joint_pos_rel = joint_pos - simcfg.default_angles
+
+    gravity_orientation = get_gravity_orientation(base_quat)
+    lidar_measurement = np.zeros(648, dtype=np.float32)  
+
+    # policy observation
+    policy_obs[:3] = base_vel
+    policy_obs[3:6] = base_omega
+    policy_obs[6:9] = gravity_orientation
+    policy_obs[9:12] = simcfg.cmd
+    policy_obs[12 : 12 + simcfg.num_actions] = joint_pos_rel
+    policy_obs[12 + simcfg.num_actions : 12 + 2 * simcfg.num_actions] = joint_vel
+    policy_obs[12 + 2 * simcfg.num_actions : 12 + 3 * simcfg.num_actions] = action # 0 at first
+    policy_obs[12 + 3 * simcfg.num_actions : 12 + 3 * simcfg.num_actions + 648] = lidar_measurement # 771
+    policy_obs_tensor = torch.from_numpy(policy_obs).float()
+    
+    # proprio observation
+    proprio_obs[:3] = base_vel
+    proprio_obs[3:6] = base_omega
+    proprio_obs[6:9] = gravity_orientation
+    proprio_obs[9:12] = simcfg.cmd
+    proprio_obs[12 : 12 + simcfg.num_actions] = joint_pos_rel
+    proprio_obs[12 + simcfg.num_actions : 12 + 2 * simcfg.num_actions] = joint_vel
+    proprio_obs[12 + 2 * simcfg.num_actions : 12 + 3 * simcfg.num_actions] = action 
+    proprio_obs_tensor = torch.from_numpy(proprio_obs).float()
+
+    # Update proprio_obs buffer
+    proprio_obs_buf = torch.cat([proprio_obs_tensor.unsqueeze(0)] * simcfg.history_length, dim=0)
+
+    # Concatenate current observation
+    history_proprio_obs = proprio_obs_buf.view(-1)
+
+    obs = torch.cat([policy_obs_tensor, history_proprio_obs], dim=0)
+
+    return policy_obs_tensor, proprio_obs_buf, history_proprio_obs
 
 class SimConfig:
     # load config
-    joint_config_path = "/home/xunyang/Desktop/Projects/legged-loco/scripts/g1.yaml"
-    policy_path = "/home/xunyang/Desktop/Projects/legged-loco/logs/rsl_rl/g1_vision_rough/2025-02-25_21-49-44_g1-blind/exported/policy.jit"
-    xml_path = "/home/xunyang/Desktop/Projects/legged-loco/assets/robots/g1/g1_minimal_terrain.xml"
+    joint_config_path = "./scripts/g1.yaml"
+    # policy_path = "./logs/rsl_rl/g1_vision_rough/2025-02-25_21-49-44_g1-blind/exported/policy.jit"
+    policy_path = "/home/xunyang/Desktop/Projects/legged-loco/logs/rsl_rl/g1_vision_rough/2025-03-01_21-16-40_XXX/exported/1policy.jit"
+    xml_path = "./assets/robots/g1_hand/g1.xml"
 
     simulation_duration = 1600.0
     simulation_dt = 0.00125
     control_decimation = 16     # Controller update frequency (meets the requirement of simulation_dt * controll_decimation=0.02; 50Hz)
     num_actions = 37
-    num_obs = 1878       
+    num_obs = 771       
     history_length = 9
-    cmd = np.array([0.8, 0.0, 0.0], dtype=np.float32)
+    cmd = np.array([0.4, 0.0, 0.0], dtype=np.float32)
     kps, kds, default_angles = load_joint_config(joint_config_path)
     policy_obs_dim = 771
     proprio_obs_dim = 123
@@ -146,43 +198,55 @@ if __name__ == "__main__":
     policy_obs = np.zeros(simcfg.policy_obs_dim, dtype=np.float32)
     proprio_obs = np.zeros(simcfg.proprio_obs_dim, dtype=np.float32)
     proprio_obs_buf = torch.zeros(simcfg.history_length, simcfg.proprio_obs_dim, dtype=torch.float)
-    history_proprio_obs = torch.zeros(simcfg.history_length, simcfg.proprio_obs_dim, dtype=torch.float)
+    history_proprio_obs = torch.zeros(simcfg.history_length*simcfg.proprio_obs_dim, dtype=torch.float)
 
     # Load robot model
     m = mujoco.MjModel.from_xml_path(simcfg.xml_path)
     d = mujoco.MjData(m)
     m.opt.timestep = simcfg.simulation_dt
+    # 仿真一步以初始化数据
+    mujoco.mj_step(m, d)
 
-    obs, proprio_obs_buf = get_obs(d, simcfg, proprio_obs_buf)
+    obs, proprio_obs_buf, history_proprio_obs = get_init_obs(d, simcfg, proprio_obs_buf, history_proprio_obs, action, policy_obs, proprio_obs)
+    
     # load policy
     policy = torch.jit.load(simcfg.policy_path)
 
     with mujoco.viewer.launch_passive(m, d) as viewer:
         # Close the viewer automatically after simulation_duration wall-seconds.
         start = time.time()
-        
         while viewer.is_running() and time.time() - start < simcfg.simulation_duration:
-            step_start = time.time()
-            tau = pd_control(target_dof_pos, d.qpos[7:], simcfg.kps, np.zeros_like(simcfg.kds), d.qvel[6:], simcfg.kds)
-            d.ctrl[:] = tau
-            # mj_step can be replaced with code that also evaluates
-            # a policy and applies a control signal before stepping the physics.
-            mujoco.mj_step(m, d)
-            counter += 1
+            with torch.inference_mode():    # 
+                step_start = time.time()
 
-            if counter % simcfg.control_decimation == 0:
-                # get observation
-                obs, proprio_obs_buf = get_obs(d, simcfg, proprio_obs_buf)
-                action = policy(obs)
-                action = torch.clamp(action, -20, 20)
-                action = action.detach().numpy().squeeze()
-                # transform action to target_dof_pos
-                target_dof_pos = action*0.5 + simcfg.default_angles
+                
+                               
+                if counter % simcfg.control_decimation == 0: 
+                    obs, proprio_obs_buf, history_proprio_obs = get_obs(d, simcfg, proprio_obs_buf, history_proprio_obs, action, policy_obs, proprio_obs)
+                    
+                    action = policy(obs)
+                    action = torch.clamp(action, -20, 20)
+                    
+                    # target_dof_pos = torch.clamp(action, -20, 20).detach().numpy().squeeze()
+                    # transform action to target_dof_pos
+                    _action = action.detach().numpy().squeeze()
+                    target_dof_pos = _action*0.5 + simcfg.default_angles
 
-            # Pick up changes to the physics state, apply perturbations, update options from GUI.
-            viewer.sync()
 
-            # Rudimentary time keeping, will drift relative to wall clock.
-            time_until_next_step = m.opt.timestep - (time.time() - step_start)
-            if time_until_next_step > 0:
-                time.sleep(time_until_next_step)
+                    
+                tau_limit = 200. * np.ones(37, dtype=np.double)  
+                tau = pd_control(target_dof_pos, reindex_data(d.qpos[7:]), simcfg.kps, np.zeros_like(simcfg.kds), reindex_data(d.qvel[6:]), simcfg.kds)
+                tau = np.clip(tau, -tau_limit, tau_limit)  
+
+                d.ctrl[:] = tau
+                mujoco.mj_step(m, d)
+                counter += 1
+                
+
+                # Pick up changes to the physics state, apply perturbations, update options from GUI.
+                viewer.sync()
+
+                # Rudimentary time keeping, will drift relative to wall clock.
+                time_until_next_step = m.opt.timestep - (time.time() - step_start)
+                if time_until_next_step > 0:
+                    time.sleep(time_until_next_step)

@@ -37,7 +37,7 @@ from isaaclab_tasks.manager_based.locomotion.velocity.config.g1.rough_env_cfg im
 # Pre-defined configs
 ##
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-from isaaclab_assets import G1_MINIMAL_CFG  # isort: skip
+from isaaclab_assets import G1_MINIMAL_CFG, G1_CFG  # isort: skip
 
 from isaaclab_rl.rsl_rl import (
     RslRlOnPolicyRunnerCfg,
@@ -228,9 +228,9 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         # ),
         "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
             proportion=1.0, 
-            num_obstacles=1,
+            num_obstacles=10,
             obstacle_height_mode="choice",
-            obstacle_height_range=(0.10, 0.20), obstacle_width_range=(0.1, 0.2), 
+            obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
             platform_width=2.0
         ),
     },
@@ -270,7 +270,8 @@ class TrainSceneCfg(InteractiveSceneCfg):
         debug_vis=False,
     )
     # robots
-    robot = G1_MINIMAL_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot = G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # robot = G1_MINIMAL_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     # robot = G1_NO_ARMS_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     # sensors
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, debug_vis=False)
@@ -706,7 +707,7 @@ class G1VisionRoughEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the locomotion velocity-tracking environment."""
 
     # Scene settings
-    scene: TrainSceneCfg = TrainSceneCfg(num_envs=4096, env_spacing=2.5)
+    scene: TrainSceneCfg = TrainSceneCfg(num_envs=1024, env_spacing=2.5)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -815,7 +816,7 @@ class G1VisionRoughEnvCfg_PLAY(G1VisionRoughEnvCfg):
             # self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range = (0.17, 0.17)
             # self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.17, 0.17)
 
-        self.commands.base_velocity.ranges.lin_vel_x = (0.5, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
         self.commands.base_velocity.ranges.heading = (0.0, 0.0)
