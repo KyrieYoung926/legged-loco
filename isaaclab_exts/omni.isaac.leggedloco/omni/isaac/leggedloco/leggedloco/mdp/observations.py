@@ -147,6 +147,7 @@ def process_lidar(env: BaseEnv, sensor_cfg: SceneEntityCfg, offset: float = 0.5)
     output = (output - near_clip) / (far_clip - near_clip)  - 0.5
     temp = output.reshape(env.num_envs, -1)
     temp_zeros = torch.zeros_like(temp)
+    torch.save(temp, "tensor_lidar.pt")
     return temp
 
 
@@ -287,9 +288,9 @@ range_x = [-0.8, 0.2+1e-9]
 range_y = [-0.8, 0.8+1e-9]
 range_z = [0.0, 5.0]
 
-from collections import deque
+# from collections import deque
 # Create a deque with a maximum length of 10
-prev_height_maps = deque(maxlen=10)
+# prev_height_maps = deque(maxlen=10)
 
 def height_map_lidar(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, offset: float = 0.5) -> torch.Tensor:
     """Height scan from the given sensor w.r.t. the sensor's frame.
