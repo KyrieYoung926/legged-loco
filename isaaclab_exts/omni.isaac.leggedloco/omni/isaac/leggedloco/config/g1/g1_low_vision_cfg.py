@@ -228,7 +228,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         # ),
         "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
             proportion=1.0, 
-            num_obstacles=10,
+            num_obstacles=0,
             obstacle_height_mode="choice",
             obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
             platform_width=2.0
@@ -883,7 +883,7 @@ class G1VisionRoughEnvCfg_PLAY(G1VisionRoughEnvCfg):
         super().__post_init__()
 
         # make a smaller scene for play
-        self.scene.num_envs = 40
+        self.scene.num_envs = 10
         self.scene.env_spacing = 2.5
         self.episode_length_s = 40.0
         # spawn the robot randomly in the grid (instead of their terrain levels)
