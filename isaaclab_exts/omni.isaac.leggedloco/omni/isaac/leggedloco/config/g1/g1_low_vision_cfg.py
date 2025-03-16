@@ -80,7 +80,7 @@ class G1VisionRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 """Configuration for the Unitree G1 Humanoid robot without arms."""
 G1_NO_ARMS_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=os.path.join(ASSETS_DIR, "robots/g1_description/g1_arm_fixed/g1_hand_fixed_minimal.usd"),
+        usd_path=os.path.join("/home/xunyang/Desktop/Projects/Genesis_Legged_Gym/resources/robots/g1/g1_body29_fixed_inspired_hand/g1_body29_fixed_inspired_hand.usd"),
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -101,11 +101,11 @@ G1_NO_ARMS_CFG = ArticulationCfg(
             ".*_hip_pitch_joint": -0.20,
             ".*_knee_joint": 0.42,
             ".*_ankle_pitch_joint": -0.23,
-            ".*_elbow_pitch_joint": 0.87,
+            ".*_elbow_joint": 0.87,
             "left_shoulder_roll_joint": 0.16,
             "left_shoulder_pitch_joint": 0.35,
             "right_shoulder_roll_joint": -0.16,
-            "right_shoulder_pitch_joint": 0.35,
+            "right_shoulder_pitch_joint": 0.35, 
             # "left_one_joint": 1.0,
             # "right_one_joint": -1.0,
             # "left_two_joint": 0.52,
@@ -121,7 +121,7 @@ G1_NO_ARMS_CFG = ArticulationCfg(
                 ".*_hip_roll_joint",
                 ".*_hip_pitch_joint",
                 ".*_knee_joint",
-                "torso_joint",
+                "waist_.*",
             ],
             effort_limit=300,
             velocity_limit=100.0,
@@ -130,19 +130,18 @@ G1_NO_ARMS_CFG = ArticulationCfg(
                 ".*_hip_roll_joint": 150.0,
                 ".*_hip_pitch_joint": 200.0,
                 ".*_knee_joint": 200.0,
-                "torso_joint": 200.0,
+                "waist_.*": 200.0,
             },
             damping={
                 ".*_hip_yaw_joint": 5.0,
                 ".*_hip_roll_joint": 5.0,
                 ".*_hip_pitch_joint": 5.0,
                 ".*_knee_joint": 5.0,
-                "torso_joint": 5.0,
+                "waist_.*": 5.0,
             },
             armature={
                 ".*_hip_.*": 0.01,
                 ".*_knee_joint": 0.01,
-                "torso_joint": 0.01,
             },
         ),
         "feet": ImplicitActuatorCfg(
@@ -157,15 +156,8 @@ G1_NO_ARMS_CFG = ArticulationCfg(
                 ".*_shoulder_pitch_joint",
                 ".*_shoulder_roll_joint",
                 ".*_shoulder_yaw_joint",
-                ".*_elbow_pitch_joint",
-                ".*_elbow_roll_joint",
-                # ".*_five_joint",
-                # ".*_three_joint",
-                # ".*_six_joint",
-                # ".*_four_joint",
-                # ".*_zero_joint",
-                # ".*_one_joint",
-                # ".*_two_joint",
+                ".*_elbow_joint",
+                ".*_wrist_.*",
             ],
             effort_limit=300,
             velocity_limit=100.0,
@@ -174,13 +166,6 @@ G1_NO_ARMS_CFG = ArticulationCfg(
             armature={
                 ".*_shoulder_.*": 0.01,
                 ".*_elbow_.*": 0.01,
-                # ".*_five_joint": 0.001,
-                # ".*_three_joint": 0.001,
-                # ".*_six_joint": 0.001,
-                # ".*_four_joint": 0.001,
-                # ".*_zero_joint": 0.001,
-                # ".*_one_joint": 0.001,
-                # ".*_two_joint": 0.001,
             },
         ),
     },
@@ -228,7 +213,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         # ),
         "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
             proportion=1.0, 
-            num_obstacles=0,
+            num_obstacles=10,
             obstacle_height_mode="choice",
             obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
             platform_width=2.0
@@ -271,8 +256,8 @@ class TrainSceneCfg(InteractiveSceneCfg):
     )
     # robots
     # robot = G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    robot = G1_MINIMAL_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    # robot = G1_NO_ARMS_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    # robot = G1_MINIMAL_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot = G1_NO_ARMS_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     # sensors
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, debug_vis=False)
     # lights
@@ -314,20 +299,7 @@ class TrainSceneCfg(InteractiveSceneCfg):
         ),
         max_distance=5,
     )
-    depth_sensor = None
-    depth_sensor = RayCasterCameraCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/pelvis",
-        mesh_prim_paths=["/World/ground"],
-        offset=RayCasterCameraCfg.OffsetCfg(pos=(0.108, -0.0325, 0.420), rot=(0.389, 0.0, 0.921, 0.0)),
-        data_types=["distance_to_image_plane"],
-        debug_vis=False,
-        pattern_cfg=patterns.PinholeCameraPatternCfg(
-            focal_length=1.93, horizontal_aperture=3.8,
-            height=53,
-            width=30,
-        ),
-        max_distance=10,
-    )
+
 
 
 ##
@@ -423,13 +395,6 @@ class ObservationsCfg:
         def __post_init__(self):
             self.concatenate_terms = True
 
-    # @configclass
-    # class HighResDepth(ObsGroup):
-    #     realsense_depth_measurement = ObsTerm(
-    #         func=mdp.process_depth_image,
-    #         params={"sensor_cfg": SceneEntityCfg("depth_sensor"), "data_type": "distance_to_image_plane"},
-    #         noise=Unoise(n_min=-0.1, n_max=0.1),
-    #     )
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -612,17 +577,12 @@ class G1NoArmsRewardsCfg:
                     ".*_shoulder_pitch_joint",
                     ".*_shoulder_roll_joint",
                     ".*_shoulder_yaw_joint",
-                    ".*_elbow_pitch_joint",
-                    ".*_elbow_roll_joint",
+                    ".*_elbow_joint",
                 ],
             )
         },
     )
-    joint_deviation_torso = RewTerm(
-        func=mdp.joint_deviation_l1,
-        weight=-0.1,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names="torso_joint")},
-    )
+
     # -- optional penalties
     flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=0.0)
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=0.0)
@@ -717,34 +677,21 @@ class CustomG1Rewards(G1Rewards):
                     ".*_shoulder_pitch_joint",
                     ".*_shoulder_roll_joint",
                     ".*_shoulder_yaw_joint",
-                    ".*_elbow_pitch_joint",
-                    ".*_elbow_roll_joint",
-                ],
-            )
-        },
-    )
-    joint_deviation_fingers = RewTerm(
-        func=mdp.joint_deviation_l1,
-        weight=-0.05,
-        params={
-            "asset_cfg": SceneEntityCfg(
-                "robot",
-                joint_names=[
-                    ".*_five_joint",
-                    ".*_three_joint",
-                    ".*_six_joint",
-                    ".*_four_joint",
-                    ".*_zero_joint",
-                    ".*_one_joint",
-                    ".*_two_joint",
+                    ".*_elbow_joint",
+                    ".*_wrist_.*",
                 ],
             )
         },
     )
     joint_deviation_torso = RewTerm(
         func=mdp.joint_deviation_l1,
-        weight=-0.2,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names="torso_joint")},
+        weight=-0.3,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*waist_yaw_joint", ".*waist_roll_joint"])},
+    )
+    joint_deviation_waist_pitch = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.8,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*waist_pitch_joint"])},
     )
 
     
@@ -778,7 +725,8 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*torso_link"), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", 
+                                             body_names=[".*shoulder.*",".*elbow.*",".*hip.*",".*knee.*"]),"threshold": 1},    
     )
 
 
@@ -795,7 +743,7 @@ class G1VisionRoughEnvCfg(ManagerBasedRLEnvCfg):
     commands: CommandsCfg = CommandsCfg()
     # MDP settings
     # rewards: RewardsCfg = G1Rewards()
-    #rewards: RewardsCfg = G1NoArmsRewardsCfg()
+    # rewards: RewardsCfg = G1NoArmsRewardsCfg()
     rewards: RewardsCfg = CustomG1Rewards()
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventCfg = EventCfg()
@@ -858,8 +806,6 @@ class G1VisionRoughEnvCfg(ManagerBasedRLEnvCfg):
         # self.scene.lidar_sensor = None
         if self.scene.lidar_sensor is not None:
             self.scene.lidar_sensor.update_period = self.decimation * self.sim.dt
-        if self.scene.depth_sensor is not None:
-            self.scene.depth_sensor.update_period = self.decimation * self.sim.dt
         if self.scene.height_scanner is not None:
             self.scene.height_scanner.update_period = self.decimation * self.sim.dt
         if self.scene.contact_forces is not None:

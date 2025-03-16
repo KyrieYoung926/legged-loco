@@ -370,19 +370,19 @@ def height_map_lidar(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, offset: f
     # # # # Reshape map_2_5D to 2D image
     # image = map_2_5D[0].cpu().numpy().reshape(len(x_bins), len(y_bins))
 
-    # Visualization (optional)
-    image = max_across_frames[0].cpu().numpy().reshape(len(x_bins), len(y_bins))
+    # # Visualization (optional)
+    # image = max_across_frames[0].cpu().numpy().reshape(len(x_bins), len(y_bins))
 
-    image = (image * 255).astype(int)
-    # image = image.astype('uint8')
+    # image = (image * 255).astype(int)
+    # # image = image.astype('uint8')
 
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
-    plt.clf()  # 清空当前图像
-    plt.imshow(image, cmap='gray')
-    plt.title("Height Map")
-    plt.axis("off")
-    plt.pause(0.001)  # 短暂停留，允许 GUI 事件处理
+    # plt.clf()  # 清空当前图像
+    # plt.imshow(image, cmap='gray')
+    # plt.title("Height Map")
+    # plt.axis("off")
+    # plt.pause(0.001)  # 短暂停留，允许 GUI 事件处理
     # output = (max_across_frames * (torch.rand(map_2_5D.shape, device=map_2_5D.device) > 0.05))
 
     # print("output: ", output)
