@@ -65,7 +65,7 @@ class G1VisionRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.008,
+        entropy_coef=0.01,
         num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,
@@ -102,9 +102,9 @@ G1_NO_ARMS_CFG = ArticulationCfg(
             ".*_knee_joint": 0.42,
             ".*_ankle_pitch_joint": -0.23,
             ".*_elbow_joint": 0.87,
-            "left_shoulder_roll_joint": 0.16,
+            "left_shoulder_roll_joint": 0.28,
             "left_shoulder_pitch_joint": 0.35,
-            "right_shoulder_roll_joint": -0.16,
+            "right_shoulder_roll_joint": -0.28,
             "right_shoulder_pitch_joint": 0.35, 
             # "left_one_joint": 1.0,
             # "right_one_joint": -1.0,
@@ -213,7 +213,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         # ),
         "init_pos": terrain_gen.HfDiscreteObstaclesTerrainCfg(
             proportion=1.0, 
-            num_obstacles=10,
+            num_obstacles=0,
             obstacle_height_mode="choice",
             obstacle_height_range=(3.0, 3.0), obstacle_width_range=(0.5, 1.5), 
             platform_width=2.0
@@ -409,7 +409,68 @@ class ObservationsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True)
+    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True,clip={
+                "left_hip_pitch_joint": (-2.5307, 2.8798),
+                "left_hip_roll_joint": (-0.5236, 2.9671),
+                "left_hip_yaw_joint": (-2.7576, 2.7576),
+                "left_knee_joint": (-0.087267, 2.8798),
+                "left_ankle_pitch_joint": (-0.87267, 0.5236),
+                "left_ankle_roll_joint": (-0.2618, 0.2618),
+                "right_hip_pitch_joint": (-2.5307, 2.8798),
+                "right_hip_roll_joint": (-2.9671, 0.5236),
+                "right_hip_yaw_joint": (-2.7576, 2.7576),
+                "right_knee_joint": (-0.087267, 2.8798),
+                "right_ankle_pitch_joint": (-0.87267, 0.5236),
+                "right_ankle_roll_joint": (-0.2618, 0.2618),
+                "waist_yaw_joint": (-2.618, 2.618),
+                "waist_roll_joint": (-0.52, 0.52),
+                "waist_pitch_joint": (-0.52, 0.52),
+                "left_shoulder_pitch_joint": (-3.0892, 2.6704),
+                "left_shoulder_roll_joint": (-1.5882, 2.2515),
+                "left_shoulder_yaw_joint": (-2.618, 2.618),
+                "left_elbow_joint": (-1.0472, 2.0944),
+                "left_wrist_roll_joint": (-1.972222054, 1.972222054),
+                "left_wrist_pitch_joint": (-1.614429558, 1.614429558),
+                "left_wrist_yaw_joint": (-1.614429558, 1.614429558),
+                "right_shoulder_pitch_joint": (-3.0892, 2.6704),
+                "right_shoulder_roll_joint": (-2.2515, 1.5882),
+                "right_shoulder_yaw_joint": (-2.618, 2.618),
+                "right_elbow_joint": (-1.0472, 2.0944),
+                "right_wrist_roll_joint": (-1.972222054, 1.972222054),
+                "right_wrist_pitch_joint": (-1.614429558, 1.614429558),
+                "right_wrist_yaw_joint": (-1.614429558, 1.614429558),
+        })
+    # clip = {
+    #             "left_hip_pitch_joint": (-2.5307, 2.8798),
+    #             "left_hip_roll_joint": (-0.5236, 2.9671),
+    #             "left_hip_yaw_joint": (-2.7576, 2.7576),
+    #             "left_knee_joint": (-0.087267, 2.8798),
+    #             "left_ankle_pitch_joint": (-0.87267, 0.5236),
+    #             "left_ankle_roll_joint": (-0.2618, 0.2618),
+    #             "right_hip_pitch_joint": (-2.5307, 2.8798),
+    #             "right_hip_roll_joint": (-2.9671, 0.5236),
+    #             "right_hip_yaw_joint": (-2.7576, 2.7576),
+    #             "right_knee_joint": (-0.087267, 2.8798),
+    #             "right_ankle_pitch_joint": (-0.87267, 0.5236),
+    #             "right_ankle_roll_joint": (-0.2618, 0.2618),
+    #             "waist_yaw_joint": (-2.618, 2.618),
+    #             "waist_roll_joint": (-0.52, 0.52),
+    #             "waist_pitch_joint": (-0.52, 0.52),
+    #             "left_shoulder_pitch_joint": (-3.0892, 2.6704),
+    #             "left_shoulder_roll_joint": (-1.5882, 2.2515),
+    #             "left_shoulder_yaw_joint": (-2.618, 2.618),
+    #             "left_elbow_joint": (-1.0472, 2.0944),
+    #             "left_wrist_roll_joint": (-1.972222054, 1.972222054),
+    #             "left_wrist_pitch_joint": (-1.614429558, 1.614429558),
+    #             "left_wrist_yaw_joint": (-1.614429558, 1.614429558),
+    #             "right_shoulder_pitch_joint": (-3.0892, 2.6704),
+    #             "right_shoulder_roll_joint": (-2.2515, 1.5882),
+    #             "right_shoulder_yaw_joint": (-2.618, 2.618),
+    #             "right_elbow_joint": (-1.0472, 2.0944),
+    #             "right_wrist_roll_joint": (-1.972222054, 1.972222054),
+    #             "right_wrist_pitch_joint": (-1.614429558, 1.614429558),
+    #             "right_wrist_yaw_joint": (-1.614429558, 1.614429558),
+    #         }
 
 ##
 # Events (for domain randomization)
@@ -658,7 +719,7 @@ class CustomG1Rewards(G1Rewards):
     # Penalize ankle joint limits
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-1.0,
+        weight=-2.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])},
     )
     # Penalize deviation from default of the joints that are not essential for locomotion
@@ -682,6 +743,11 @@ class CustomG1Rewards(G1Rewards):
                 ],
             )
         },
+    )
+    joint_deviation_shoulder_roll = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.3,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=".*_shoulder_roll_joint")},
     )
     joint_deviation_torso = RewTerm(
         func=mdp.joint_deviation_l1,
