@@ -476,3 +476,19 @@ def stand_still_penalty(
 
     small_commands = torch.norm(env.command_manager.get_command(command_name)[:, :2], dim=-1) < 0.1
     return rew * small_commands
+
+
+def action_out_joint_limts(env: ManagerBasedRLEnv,asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize actions that go beyond the joint limits.
+
+    This function penalizes the agent for taking actions that go beyond the joint limits of the robot.
+    The reward is computed as the sum of the squared difference between the joint limits and the actions.
+    """
+    # extract the used quantities (to enable type-hinting)
+    raw_action = env.action_manager._terms["joint_pos"].raw_actions * env.action_manager._terms["joint_pos"]._scale + env.action_manager._terms["joint_pos"]._offset
+    asset = env.scene[asset_cfg.name]
+    joint_raw_action = raw_action[:, asset_cfg.joint_ids]
+    #asset.data.joint_limits (self.num_envs, self.num_joints,2) ,2 means lower and upper limits
+    out_of_limits = -(torch.square(joint_raw_action-asset.data.joint_limits[:, asset_cfg.joint_ids,0])).clip(max=0.0)
+    out_of_limits += (torch.square(joint_raw_action-asset.data.joint_limits[:, asset_cfg.joint_ids,1])).clip(min=0.0)
+    return torch.sum(out_of_limits, dim=1)

@@ -410,36 +410,12 @@ class ActionsCfg:
     """Action specifications for the MDP."""
 
     joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True,clip={
-                "left_hip_pitch_joint": (-2.5307, 2.8798),
-                "left_hip_roll_joint": (-0.5236, 2.9671),
-                "left_hip_yaw_joint": (-2.7576, 2.7576),
-                "left_knee_joint": (-0.087267, 2.8798),
-                "left_ankle_pitch_joint": (-0.87267, 0.5236),
-                "left_ankle_roll_joint": (-0.2618, 0.2618),
-                "right_hip_pitch_joint": (-2.5307, 2.8798),
-                "right_hip_roll_joint": (-2.9671, 0.5236),
-                "right_hip_yaw_joint": (-2.7576, 2.7576),
-                "right_knee_joint": (-0.087267, 2.8798),
                 "right_ankle_pitch_joint": (-0.87267, 0.5236),
                 "right_ankle_roll_joint": (-0.2618, 0.2618),
-                "waist_yaw_joint": (-2.618, 2.618),
-                "waist_roll_joint": (-0.52, 0.52),
-                "waist_pitch_joint": (-0.52, 0.52),
-                "left_shoulder_pitch_joint": (-3.0892, 2.6704),
-                "left_shoulder_roll_joint": (-1.5882, 2.2515),
-                "left_shoulder_yaw_joint": (-2.618, 2.618),
-                "left_elbow_joint": (-1.0472, 2.0944),
-                "left_wrist_roll_joint": (-1.972222054, 1.972222054),
-                "left_wrist_pitch_joint": (-1.614429558, 1.614429558),
-                "left_wrist_yaw_joint": (-1.614429558, 1.614429558),
-                "right_shoulder_pitch_joint": (-3.0892, 2.6704),
-                "right_shoulder_roll_joint": (-2.2515, 1.5882),
-                "right_shoulder_yaw_joint": (-2.618, 2.618),
-                "right_elbow_joint": (-1.0472, 2.0944),
-                "right_wrist_roll_joint": (-1.972222054, 1.972222054),
-                "right_wrist_pitch_joint": (-1.614429558, 1.614429558),
-                "right_wrist_yaw_joint": (-1.614429558, 1.614429558),
-        })
+            
+                "left_ankle_pitch_joint": (-0.87267, 0.5236),
+                "left_ankle_roll_joint": (-0.2618, 0.2618),
+    })
     # clip = {
     #             "left_hip_pitch_joint": (-2.5307, 2.8798),
     #             "left_hip_roll_joint": (-0.5236, 2.9671),
@@ -497,15 +473,15 @@ class EventCfg:
         mode="startup",
         params={"asset_cfg": SceneEntityCfg("robot", body_names="pelvis"), "mass_distribution_params": (-5.0, 5.0), "operation": "add"},
     )
-    actuator_gains = EventTerm(
-        func=mdp.randomize_actuator_gains,
-        mode="reset",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
-            "stiffness_distribution_params": (0.8, 1.2),
-            "operation": "scale",
-        },
-    )
+    # actuator_gains = EventTerm(
+    #     func=mdp.randomize_actuator_gains,
+    #     mode="reset",
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", joint_names=".*"),
+    #         "stiffness_distribution_params": (0.8, 1.2),
+    #         "operation": "scale",
+    #     },
+    # )
 
     # reset
     base_external_force_torque = EventTerm(
@@ -661,7 +637,7 @@ class CustomG1Rewards(G1Rewards):
     base_height = RewTerm(
         func=mdp.base_height_l2,
         weight=-5.0,
-        params={"target_height": 0.70},
+        params={"target_height": 0.74},
     )    
     stand_still_penalty = RewTerm(
         func=mdp.stand_still_penalty,
@@ -700,7 +676,7 @@ class CustomG1Rewards(G1Rewards):
     )
     feet_air_time = RewTerm(
         func=mdp.feet_air_time_positive_biped,
-        weight=0.05,
+        weight=0.3,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
@@ -709,7 +685,7 @@ class CustomG1Rewards(G1Rewards):
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.25,
+        weight=-0.2,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
@@ -719,8 +695,8 @@ class CustomG1Rewards(G1Rewards):
     # Penalize ankle joint limits
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-2.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"])},
+        weight=-10.0,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint"])},
     )
     # Penalize deviation from default of the joints that are not essential for locomotion
     joint_deviation_hip = RewTerm(
@@ -759,7 +735,9 @@ class CustomG1Rewards(G1Rewards):
         weight=-0.8,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*waist_pitch_joint"])},
     )
-
+    action_out_joint_limts = RewTerm(
+        func=mdp.action_out_joint_limts, weight=-3.0, 
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch.*", ".*_ankle_roll.*"])})
     
 ##
 # Commands
@@ -847,7 +825,7 @@ class G1VisionRoughEnvCfg(ManagerBasedRLEnvCfg):
         }
 
         # Rewards
-        self.rewards.feet_air_time.weight = 0.05
+        self.rewards.feet_air_time.weight = 0.20
         self.rewards.lin_vel_z_l2.weight = 0.0
         self.rewards.undesired_contacts = None
         self.rewards.flat_orientation_l2.weight = -1.0
