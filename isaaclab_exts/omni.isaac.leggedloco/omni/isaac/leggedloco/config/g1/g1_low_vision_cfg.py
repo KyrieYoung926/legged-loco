@@ -65,7 +65,7 @@ class G1VisionRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.01,
+        entropy_coef=0.008,
         num_learning_epochs=5,
         num_mini_batches=4,
         learning_rate=1.0e-3,
@@ -75,6 +75,150 @@ class G1VisionRoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+G1_INSPIRE_CFG = ArticulationCfg(
+    spawn=sim_utils.UsdFileCfg(
+        usd_path=os.path.join("/home/xunyang/Desktop/Projects/Genesis_Legged_Gym/resources/robots/g1_inspire_mv/g1_body29_fixed_inspired_hand.usd"),
+        activate_contact_sensors=True,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            retain_accelerations=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+            max_linear_velocity=1000.0,
+            max_angular_velocity=1000.0,
+            max_depenetration_velocity=1.0,
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.76),
+        joint_pos={
+            ".*_hip_pitch_joint": -0.20,
+            ".*_knee_joint": 0.42,
+            ".*_ankle_pitch_joint": -0.23,
+            ".*_elbow_joint": 0.87,
+            "left_shoulder_roll_joint": 0.28,
+            "left_shoulder_pitch_joint": 0.35,
+            "right_shoulder_roll_joint": -0.28,
+            "right_shoulder_pitch_joint": 0.35,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    soft_joint_pos_limit_factor=0.90,
+    actuators={
+        "legs": ImplicitActuatorCfg(
+            joint_names_expr=[
+                ".*_hip_yaw_joint",
+                ".*_hip_roll_joint",
+                ".*_hip_pitch_joint",
+                ".*_knee_joint",
+                "waist_.*",
+            ],
+            effort_limit_sim={
+                ".*_hip_yaw_joint": 88.0,
+                ".*_hip_roll_joint": 139.0,
+                ".*_hip_pitch_joint": 88.0,
+                ".*_knee_joint": 139.0,
+                "waist_yaw_joint": 88.0,
+                "waist_roll_joint": 50.0,
+                "waist_pitch_joint": 50.0,
+            },
+            velocity_limit_sim={
+                ".*_hip_yaw_joint": 32.0,
+                ".*_hip_roll_joint": 20.0,
+                ".*_hip_pitch_joint": 32.0,
+                ".*_knee_joint": 20.0,
+                "waist_yaw_joint": 32.0,
+                "waist_roll_joint": 37.0,
+                "waist_pitch_joint": 37.0,
+            },
+            stiffness={
+                ".*_hip_yaw_joint": 150.0,
+                ".*_hip_roll_joint": 150.0,
+                ".*_hip_pitch_joint": 200.0,
+                ".*_knee_joint": 200.0,
+                "waist.*": 200.0,
+            },
+            damping={
+                ".*_hip_yaw_joint": 5.0,
+                ".*_hip_roll_joint": 5.0,
+                ".*_hip_pitch_joint": 5.0,
+                ".*_knee_joint": 5.0,
+                "waist.*": 5.0,
+            },
+            armature=0.01,
+        ),
+        "feet": ImplicitActuatorCfg(
+            joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
+            effort_limit_sim={
+                ".*_ankle_pitch_joint": 50.0,
+                ".*_ankle_roll_joint": 50.0,
+            },
+            velocity_limit_sim={
+                ".*_ankle_pitch_joint": 37.0,
+                ".*_ankle_roll_joint": 37.0,
+            },
+            stiffness=20.0,
+            damping=2.0,
+            armature=0.01,
+        ),
+        "shoulders": ImplicitActuatorCfg(
+            joint_names_expr=[
+                ".*_shoulder_pitch_joint",
+                ".*_shoulder_roll_joint",
+            ],
+            effort_limit_sim={
+                ".*_shoulder_pitch_joint": 25.0,
+                ".*_shoulder_roll_joint": 25.0,
+            },
+            velocity_limit_sim={
+                ".*_shoulder_pitch_joint": 37.0,
+                ".*_shoulder_roll_joint": 37.0,
+            },
+            stiffness=100.0,
+            damping=2.0,
+            armature=0.01,
+        ),
+        "arms": ImplicitActuatorCfg(
+            joint_names_expr=[
+                ".*_shoulder_yaw_joint",
+                ".*_elbow_joint",
+            ],
+            effort_limit_sim={
+                ".*_shoulder_yaw_joint": 25.0,
+                ".*_elbow_joint": 25.0,
+            },
+            velocity_limit_sim={
+                ".*_shoulder_yaw_joint": 37.0,
+                ".*_elbow_joint": 37.0,
+            },
+            stiffness=50.0,
+            damping=2.0,
+            armature=0.1,
+        ),
+        "wrist": ImplicitActuatorCfg(
+            joint_names_expr=[
+                ".*_wrist_.*",
+            ],
+            effort_limit_sim={
+                ".*_wrist_yaw_joint": 5.0,
+                ".*_wrist_roll_joint": 25.0,
+                ".*_wrist_pitch_joint": 5.0,
+            },
+            velocity_limit_sim={
+                ".*_wrist_yaw_joint": 22.0,
+                ".*_wrist_roll_joint": 37.0,
+                ".*_wrist_pitch_joint": 22.0,
+            },
+            stiffness=40.0,
+            damping=2.0,
+            armature=0.01,
+        ),
+    },
+)
 
 
 """Configuration for the Unitree G1 Humanoid robot without arms."""
@@ -203,7 +347,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         #     proportion=0.2, grid_width=0.45, grid_height_range=(0.05, 0.1), platform_width=2.0
         # ),
         # "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-        #     proportion=0.2, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
+        #     proportion=1.0, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
         # ),
         # "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
         #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
@@ -409,7 +553,8 @@ class ObservationsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True,clip={
+    joint_pos = mdp.JointPositionActionCfg(asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True,clip=
+                                           {
                 "right_ankle_pitch_joint": (-0.87267, 0.5236),
                 "right_ankle_roll_joint": (-0.2618, 0.2618),
             
@@ -560,8 +705,8 @@ class CustomG1Rewards(G1Rewards):
     )
     base_height = RewTerm(
         func=mdp.base_height_l2,
-        weight=-5.0,
-        params={"target_height": 0.74},
+        weight=-6.0,
+        params={"target_height": 0.78},
     )    
     stand_still_penalty = RewTerm(
         func=mdp.stand_still_penalty,
@@ -600,7 +745,7 @@ class CustomG1Rewards(G1Rewards):
     )
     feet_air_time = RewTerm(
         func=mdp.feet_air_time_positive_biped,
-        weight=0.45,
+        weight=0.4,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
@@ -609,7 +754,7 @@ class CustomG1Rewards(G1Rewards):
     )
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.1,
+        weight=-0.2,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
@@ -663,16 +808,16 @@ class CustomG1Rewards(G1Rewards):
         func=mdp.action_out_joint_limts, weight=-2.0, 
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch.*", ".*_ankle_roll.*"])})
 
-    feet_height = RewTerm(
-        func=mdp.feet_height,
-        weight=0.1,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_pitch.*"),
-            "tanh_mult": 2.0,
-            "target_height": 0.05,
-            "command_name": "base_velocity",
-        },
-    )
+    # feet_height = RewTerm(
+    #     func=mdp.feet_height,
+    #     weight=0.2,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_pitch.*"),
+    #         "tanh_mult": 2.0,
+    #         "target_height": 0.05,
+    #         "command_name": "base_velocity",
+    #     },
+    # )
     gait = RewTerm(
         func=mdp.reward_gait_biped,
         weight=0.5, 
@@ -687,6 +832,12 @@ class CustomG1Rewards(G1Rewards):
             "threshold": 0.1
         },
     )
+
+    ankle_pitch_deviation = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.3,  # Stronger penalty than other joint deviations
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_ankle_pitch_joint"])},
+    )    
 ##
 # Commands
 ##

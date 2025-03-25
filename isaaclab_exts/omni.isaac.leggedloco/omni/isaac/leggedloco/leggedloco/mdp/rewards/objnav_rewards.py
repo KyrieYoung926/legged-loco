@@ -614,45 +614,45 @@ def reward_gait_biped(
     stride_error = torch.abs(stride_length - target_stride)
     stride_reward = torch.exp(-2.0 * stride_error)
     
-    # 6. Foot clearance during swing phase
-    left_foot_height = left_foot_pos[:, 2]
-    right_foot_height = right_foot_pos[:, 2]
+    # # 6. Foot clearance during swing phase
+    # left_foot_height = left_foot_pos[:, 2]
+    # right_foot_height = right_foot_pos[:, 2]
     
-    left_swing_height = torch.where(~left_contact, left_foot_height, torch.zeros_like(left_foot_height))
-    right_swing_height = torch.where(~right_contact, right_foot_height, torch.zeros_like(right_foot_height))
+    # left_swing_height = torch.where(~left_contact, left_foot_height, torch.zeros_like(left_foot_height))
+    # right_swing_height = torch.where(~right_contact, right_foot_height, torch.zeros_like(right_foot_height))
     
-    # Penalize insufficient clearance during swing (< 0.05m) and excessive height (> 0.15m)
-    min_height = 0.05
-    max_height = 0.15
+    # # Penalize insufficient clearance during swing (< 0.05m) and excessive height (> 0.15m)
+    # min_height = 0.05
+    # max_height = 0.15
     
-    left_clearance_error = torch.where(
-        left_swing_height < min_height, 
-        min_height - left_swing_height,
-        torch.where(
-            left_swing_height > max_height,
-            left_swing_height - max_height,
-            torch.zeros_like(left_swing_height)
-        )
-    )
+    # left_clearance_error = torch.where(
+    #     left_swing_height < min_height, 
+    #     min_height - left_swing_height,
+    #     torch.where(
+    #         left_swing_height > max_height,
+    #         left_swing_height - max_height,
+    #         torch.zeros_like(left_swing_height)
+    #     )
+    # )
     
-    right_clearance_error = torch.where(
-        right_swing_height < min_height, 
-        min_height - right_swing_height,
-        torch.where(
-            right_swing_height > max_height,
-            right_swing_height - max_height,
-            torch.zeros_like(right_swing_height)
-        )
-    )
+    # right_clearance_error = torch.where(
+    #     right_swing_height < min_height, 
+    #     min_height - right_swing_height,
+    #     torch.where(
+    #         right_swing_height > max_height,
+    #         right_swing_height - max_height,
+    #         torch.zeros_like(right_swing_height)
+    #     )
+    # )
     
-    clearance_reward = torch.exp(-10.0 * (left_clearance_error + right_clearance_error) / 2.0)
+    # clearance_reward = torch.exp(-10.0 * (left_clearance_error + right_clearance_error) / 2.0)
     
     # Combine rewards
     reward = (
         0.3 * stance_ratio_reward + 
         0.3 * gait_phase_reward + 
-        0.3 * stride_reward + 
-        0.1 * clearance_reward
+        0.3 * stride_reward 
+        # 0.1 * clearance_reward
     )
     
     # Apply only when robot should be moving
