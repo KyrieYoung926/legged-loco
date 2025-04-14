@@ -389,3 +389,165 @@ def height_map_lidar(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, offset: f
 
     return max_across_frames
 
+@torch.jit.script
+def cart2sphere(cart):
+    epsilon = 1e-9
+    x = cart[:, 0]
+    y = cart[:, 1]
+    z = cart[:, 2]
+    r = torch.norm(cart, dim=1)
+    theta = torch.atan2(y, x)
+    phi = torch.asin(z / (r + epsilon))
+    return torch.stack((r, theta, phi), dim=-1)
+
+
+def downsample_spherical_points_vectorized(sphere_points, num_theta_bins=10, num_phi_bins=10):
+    """
+    Downsample points in spherical coordinates by binning theta and phi values.
+    
+    Args:
+        sphere_points: Tensor of shape (num_envs, num_points, 3) where dim 2 is (r, theta, phi)
+        num_theta_bins: Number of bins for theta range (-3.14, 3.14)
+        num_phi_bins: Number of bins for phi range (-0.12, 0.907)
+        
+    Returns:
+        Downsampled points tensor of shape (num_envs, num_theta_bins*num_phi_bins, 3)
+    """
+    num_envs = sphere_points.shape[0]
+    num_points = sphere_points.shape[1]
+    device = sphere_points.device
+    num_bins = num_theta_bins * num_phi_bins
+    
+    # Define bin ranges
+    theta_min, theta_max = -3.14, 3.14
+    phi_min, phi_max = -0.12, 0.907
+    
+    # Extract r, theta, phi for all environments
+    r = sphere_points[:, :, 0]       # [num_envs, num_points]
+    theta = sphere_points[:, :, 1]   # [num_envs, num_points]
+    phi = sphere_points[:, :, 2]     # [num_envs, num_points]
+    
+    # Compute bin indices for theta and phi
+    theta_bin = ((theta - theta_min) / (theta_max - theta_min) * num_theta_bins).long()
+    phi_bin = ((phi - phi_min) / (phi_max - phi_min) * num_phi_bins).long()
+    
+    # Clamp to valid bin indices
+    theta_bin = torch.clamp(theta_bin, 0, num_theta_bins - 1)
+    phi_bin = torch.clamp(phi_bin, 0, num_phi_bins - 1)
+    
+    # Compute linear bin index (flatten 2D bin indices to 1D)
+    bin_indices = theta_bin * num_phi_bins + phi_bin  # [num_envs, num_points]
+    
+    # Create an environment index tensor to handle multiple environments
+    env_indices = torch.arange(num_envs, device=device).view(-1, 1).expand(-1, num_points)
+    
+    # Flatten tensors for scatter operation
+    flat_bin_indices = bin_indices.view(-1)            # [num_envs * num_points]
+    flat_env_indices = env_indices.reshape(-1)   # [num_envs * num_points]
+    flat_r = r.view(-1)                               # [num_envs * num_points]
+    
+    # Create 2D indices for scatter operation (env_idx, bin_idx)
+    scatter_indices = torch.stack([flat_env_indices, flat_bin_indices], dim=1)  # [num_envs * num_points, 2]
+    
+    # Prepare tensors for scatter operations
+    r_sum = torch.zeros(num_envs, num_bins, device=device)
+    bin_count = torch.zeros(num_envs, num_bins, device=device)
+    
+    # Use scatter_add_ to compute sum and count for each bin
+    r_sum.scatter_add_(1, bin_indices, r)
+    ones = torch.ones_like(r)
+    bin_count.scatter_add_(1, bin_indices, ones)
+    
+    # Avoid division by zero for empty bins
+    bin_count = torch.clamp(bin_count, min=1.0)
+    
+    # Compute average r per bin
+    avg_r = r_sum / bin_count  # [num_envs, num_bins]
+    
+    # Create bin centers for theta and phi
+    theta_centers = torch.linspace(
+        theta_min + (theta_max - theta_min) / (2 * num_theta_bins),
+        theta_max - (theta_max - theta_min) / (2 * num_theta_bins),
+        num_theta_bins, device=device
+    )
+    
+    phi_centers = torch.linspace(
+        phi_min + (phi_max - phi_min) / (2 * num_phi_bins),
+        phi_max - (phi_max - phi_min) / (2 * num_phi_bins),
+        num_phi_bins, device=device
+    )
+    
+    # Create meshgrid of bin centers
+    theta_grid, phi_grid = torch.meshgrid(theta_centers, phi_centers, indexing='ij')
+    theta_centers_flat = theta_grid.reshape(-1)  # [num_bins]
+    phi_centers_flat = phi_grid.reshape(-1)      # [num_bins]
+    
+    # Create final output tensor
+    downsampled = torch.zeros(num_envs, num_bins, 3, device=device)
+    downsampled[:, :, 0] = avg_r                              # r values
+    downsampled[:, :, 1] = theta_centers_flat.unsqueeze(0)    # theta values
+    downsampled[:, :, 2] = phi_centers_flat.unsqueeze(0)      # phi values
+    
+    return downsampled
+
+def lidar_feature(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, offset: float = 0.5) -> torch.Tensor:
+    """Process lidar data to spherical points and downsample.
+    
+    Args:
+        env: The environment instance
+        sensor_cfg: Configuration for the lidar sensor
+        offset: Offset value to subtract from the returned values
+        
+    Returns:
+        torch.Tensor: Processed and downsampled lidar features in robot base frame
+    """
+    # Get the lidar sensor
+    sensor: RayCaster = env.scene.sensors[sensor_cfg.name]
+    
+    # Get robot base frame information
+    robot = env.scene["robot"]
+    base_pos_w = robot.data.root_pos_w  # [num_envs, 3]
+    base_quat_w = robot.data.root_quat_w  # [num_envs, 4]
+    
+    # Get hit points in world frame
+    hit_vec_w = sensor.data.ray_hits_w  # [num_envs, num_points, 3]
+    
+    # Handle invalid points (inf or nan)
+    hit_vec_w[torch.isinf(hit_vec_w)] = 0.0
+    hit_vec_w[torch.isnan(hit_vec_w)] = 0.0
+    
+    # The offset pose of the sensor's frame from the sensor's parent frame.
+    pos=(0.0002835, 0.00003, 0.41818)
+    rot=(0.0, 0.0, 1.0, 0.0)
+    
+    # Convert to sensor frame
+    # 1. Get sensor position in world frame
+    sensor_offset_pos = torch.tensor(pos, device=base_pos_w.device).unsqueeze(0).repeat(env.num_envs, 1)  # [num_envs, 3]
+    sensor_pos_w = base_pos_w + math_utils.quat_apply(
+        base_quat_w,  # [num_envs, 4]
+        sensor_offset_pos  # [num_envs, 3]
+    )
+    
+    # 2. Get sensor orientation in world frame
+    sensor_offset_quat = torch.tensor(rot, device=base_quat_w.device).unsqueeze(0).repeat(env.num_envs, 1)  # [num_envs, 4]
+    sensor_quat_w = math_utils.quat_mul(
+        base_quat_w,  # [num_envs, 4]
+        sensor_offset_quat  # [num_envs, 4]
+    )
+    
+    # 3. Convert points to sensor frame
+    hit_vec_s = hit_vec_w - sensor_pos_w.unsqueeze(1)  # [num_envs, num_points, 3]
+    hit_vec_s = math_utils.quat_rotate_inverse(
+        sensor_quat_w.unsqueeze(1).repeat(1, hit_vec_s.shape[1], 1).view(-1, 4),  # [num_envs * num_points, 4]
+        hit_vec_s.view(-1, 3)  # [num_envs * num_points, 3]
+    ).view(hit_vec_s.shape)  # [num_envs, num_points, 3]
+    
+    # Convert to spherical coordinates
+    sphere_points = cart2sphere(hit_vec_s.view(-1, 3)).view(env.num_envs, -1, 3)
+    
+    # Downsample the spherical points
+    downsampled_sphere_points = downsample_spherical_points_vectorized(sphere_points, 15, 15)
+    downsample_spherical_points_r = downsampled_sphere_points[:, :, 0]  # [num_envs, num_bins]
+    r =  downsample_spherical_points_r.reshape(env.num_envs, -1)
+    torch.save(r, "tensor_lidar_spherical.pt")
+    return r

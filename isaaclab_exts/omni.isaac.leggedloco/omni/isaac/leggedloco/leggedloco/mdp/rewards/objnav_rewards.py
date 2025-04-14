@@ -490,3 +490,228 @@ def action_out_joint_limts(env: ManagerBasedRLEnv,asset_cfg: SceneEntityCfg = Sc
     out_of_limits = -(torch.square(joint_raw_action-asset.data.joint_limits[:, asset_cfg.joint_ids,0])).clip(max=0.0)
     out_of_limits += (torch.square(joint_raw_action-asset.data.joint_limits[:, asset_cfg.joint_ids,1])).clip(min=0.0)
     return torch.sum(out_of_limits, dim=1)
+
+def reward_gait_biped(
+    env: ManagerBasedRLEnv, 
+    command_name: str, 
+    sensor_cfg: SceneEntityCfg, 
+    asset_cfg: SceneEntityCfg,
+    min_stride_length: float = 0.2,
+    max_stride_length: float = 0.5,
+    stance_time_ratio: float = 0.6,
+    gait_symmetry_weight: float = 0.5,
+    threshold: float = 0.2
+) -> torch.Tensor:
+    """Reward proper bipedal gait characteristics.
+    
+    This function rewards the agent for exhibiting natural bipedal walking patterns including:
+    1. Appropriate stride length based on velocity command
+    2. Proper stance/swing time ratio (typically ~60% stance, 40% swing in human walking)
+    3. Gait symmetry between left and right legs
+    4. Proper foot clearance during swing phase
+    5. Foot stability during stance phase
+    """
+    # Extract required components
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    asset: RigidObject = env.scene[asset_cfg.name]
+    
+    # Get command velocity
+    command_vel = env.command_manager.get_command(command_name)
+    command_speed = torch.norm(command_vel[:, :2], dim=1)
+    
+    # Skip reward calculation for very low speeds
+    active_movement = command_speed > 0.1
+    
+    # Find the indices for left and right feet
+    # We need to get the actual indices from the body_ids that match our patterns
+    body_names = [contact_sensor.body_names[i] for i in sensor_cfg.body_ids]
+    left_foot_indices = [i for i, name in enumerate(body_names) if "left" in name.lower()]
+    right_foot_indices = [i for i, name in enumerate(body_names) if "right" in name.lower()]
+    
+    # Make sure we found the feet
+    if not left_foot_indices or not right_foot_indices:
+        # Return zero reward if we can't find the feet
+        return torch.zeros(env.num_envs, device=env.device)
+    
+    # Use the first index for each foot (assuming one per foot)
+    left_foot_idx = left_foot_indices[0]
+    right_foot_idx = right_foot_indices[0]
+    
+    # Get corresponding asset body indices
+    asset_body_names = [asset.body_names[i] for i in asset_cfg.body_ids]
+    left_asset_indices = [i for i, name in enumerate(asset_body_names) if "left" in name.lower()]
+    right_asset_indices = [i for i, name in enumerate(asset_body_names) if "right" in name.lower()]
+    
+    if not left_asset_indices or not right_asset_indices:
+        # Return zero reward if we can't find the feet in asset
+        return torch.zeros(env.num_envs, device=env.device)
+        
+    left_asset_idx = left_asset_indices[0]
+    right_asset_idx = right_asset_indices[0]
+    
+    # 1. Calculate foot positions and movements
+    left_foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids[left_asset_idx]]
+    right_foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids[right_asset_idx]]
+    
+    # Calculate stride length (distance between feet in forward direction)
+    stride_length = torch.norm(left_foot_pos - right_foot_pos, dim=1)
+    
+    # 2. Get contact information
+    in_contact = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids] > threshold
+    left_contact = in_contact[:, left_foot_idx]
+    right_contact = in_contact[:, right_foot_idx]
+    
+    contact_time = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids]
+    air_time = contact_sensor.data.current_air_time[:, sensor_cfg.body_ids]
+    
+    # 3. Calculate stance/swing time ratio
+    left_total_time = contact_time[:, left_foot_idx] + air_time[:, left_foot_idx]
+    right_total_time = contact_time[:, right_foot_idx] + air_time[:, right_foot_idx]
+    
+    left_stance_ratio = torch.where(left_total_time > 0, 
+                                   contact_time[:, left_foot_idx] / (left_total_time + 1e-6), 
+                                   torch.zeros_like(left_total_time))
+    right_stance_ratio = torch.where(right_total_time > 0, 
+                                    contact_time[:, right_foot_idx] / (right_total_time + 1e-6), 
+                                    torch.zeros_like(right_total_time))
+    
+    # Difference from ideal stance ratio
+    left_stance_error = torch.abs(left_stance_ratio - stance_time_ratio)
+    right_stance_error = torch.abs(right_stance_ratio - stance_time_ratio)
+    stance_ratio_reward = torch.exp(-5.0 * (left_stance_error + right_stance_error) / 2.0)
+    
+    # 4. Gait symmetry - alternate feet contact (only one foot in contact at a time)
+    single_stance = (left_contact ^ right_contact).float()
+    double_stance = (left_contact & right_contact).float()
+    
+    # Small amount of double stance is okay at transition, but mostly want single stance
+    gait_phase_reward = single_stance - 0.7 * double_stance
+    
+    # 5. Appropriate stride length based on command velocity
+    target_stride = torch.clamp(command_speed * 0.5, min_stride_length, max_stride_length)
+    stride_error = torch.abs(stride_length - target_stride)
+    stride_reward = torch.exp(-2.0 * stride_error)
+    
+    # 6. Foot clearance during swing phase
+    left_foot_height = left_foot_pos[:, 2]
+    right_foot_height = right_foot_pos[:, 2]
+    
+    left_swing_height = torch.where(~left_contact, left_foot_height, torch.zeros_like(left_foot_height))
+    right_swing_height = torch.where(~right_contact, right_foot_height, torch.zeros_like(right_foot_height))
+    
+    # Penalize insufficient clearance during swing (< 0.05m) and excessive height (> 0.15m)
+    min_height = 0.05
+    max_height = 0.15
+    
+    left_clearance_error = torch.where(
+        left_swing_height < min_height, 
+        min_height - left_swing_height,
+        torch.where(
+            left_swing_height > max_height,
+            left_swing_height - max_height,
+            torch.zeros_like(left_swing_height)
+        )
+    )
+    
+    right_clearance_error = torch.where(
+        right_swing_height < min_height, 
+        min_height - right_swing_height,
+        torch.where(
+            right_swing_height > max_height,
+            right_swing_height - max_height,
+            torch.zeros_like(right_swing_height)
+        )
+    )
+    
+    clearance_reward = torch.exp(-10.0 * (left_clearance_error + right_clearance_error) / 2.0)
+    
+    # 7. NEW: Calculate explicit gait symmetry rewards
+    
+    # 7.1 Stance time symmetry - left and right feet should have similar stance ratios
+    stance_time_symmetry_error = torch.abs(left_stance_ratio - right_stance_ratio)
+    stance_time_symmetry_reward = torch.exp(-5.0 * stance_time_symmetry_error)
+    
+    # 7.2 Step length symmetry - feet should move similar distances in their swing phases
+    # Track foot positions over time for step length
+    left_foot_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids[left_asset_idx]]
+    right_foot_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids[right_asset_idx]]
+    
+    # Calculate step velocity magnitudes when foot is in swing (not in contact)
+    left_step_vel_mag = torch.where(~left_contact, torch.norm(left_foot_vel[:, :2], dim=1), 
+                                  torch.zeros_like(left_foot_height))
+    right_step_vel_mag = torch.where(~right_contact, torch.norm(right_foot_vel[:, :2], dim=1), 
+                                    torch.zeros_like(right_foot_height))
+    
+    # Calculate velocity symmetry - ratio should be close to 1.0 when symmetric
+    step_vel_ratio = torch.where(
+        (left_step_vel_mag > 0.05) & (right_step_vel_mag > 0.05),
+        torch.min(left_step_vel_mag, right_step_vel_mag) / 
+        (torch.max(left_step_vel_mag, right_step_vel_mag) + 1e-6),
+        torch.ones_like(left_foot_height)  # Default to 1.0 when feet aren't moving
+    )
+    step_symmetry_reward = step_vel_ratio
+    
+    # Combined symmetry reward using the gait_symmetry_weight parameter
+    symmetry_reward = gait_symmetry_weight * stance_time_symmetry_reward + \
+                     (1.0 - gait_symmetry_weight) * step_symmetry_reward
+    
+    # Combine all rewards
+    reward = (
+        0.25 * stance_ratio_reward + 
+        0.40 * gait_phase_reward + 
+        0.25 * stride_reward +
+        # 0.15 * clearance_reward +
+        0.10 * symmetry_reward  # New symmetry component
+    )
+    
+    # Apply only when robot should be moving
+    reward = torch.where(active_movement, reward, torch.zeros_like(reward))
+    
+    return reward
+
+def joint_pos_limits_knee(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), min_pos: float = 0.43, max_pos: float = 1.0) -> torch.Tensor:
+    """Penalize joint positions if they cross the soft limits.
+
+    This is computed as a sum of the absolute value of the difference between the joint position and the soft limits.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # compute out of limits constraints
+    out_of_limits = -(
+        asset.data.joint_pos[:, asset_cfg.joint_ids] - min_pos
+    ).clip(max=0.0)
+    out_of_limits += (
+        asset.data.joint_pos[:, asset_cfg.joint_ids] - max_pos
+    ).clip(min=0.0)
+    return torch.sum(out_of_limits, dim=1)
+
+
+def energy(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    reward = torch.norm(torch.abs(asset.data.applied_torque * asset.data.joint_vel), dim=-1)
+    return reward
+def fly(env: ManagerBasedRLEnv, threshold: float, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold
+    return torch.sum(is_contact, dim=-1) < 0.5
+
+def body_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_orientation = math_utils.quat_rotate_inverse(asset.data.body_quat_w[:, asset_cfg.body_ids[0], :], asset.data.GRAVITY_VEC_W)
+    return torch.sum(torch.square(body_orientation[:, :2]), dim=1)
+
+def body_force(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, threshold: float = 500, max_reward: float = 400) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    reward = contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, 2].norm(dim=-1)
+    reward[reward < threshold] = 0
+    reward[reward > threshold] -= threshold
+    reward = reward.clamp(min=0, max=max_reward)
+    return reward
+
+def feet_too_near_humanoid(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), threshold: float = 0.2) -> torch.Tensor:
+    assert len(asset_cfg.body_ids) == 2
+    asset: Articulation = env.scene[asset_cfg.name]
+    feet_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, :]
+    distance = torch.norm(feet_pos[:, 0] - feet_pos[:, 1], dim=-1)
+    return (threshold - distance).clamp(min=0)
