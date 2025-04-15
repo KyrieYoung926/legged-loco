@@ -490,7 +490,7 @@ def downsample_spherical_points_vectorized(sphere_points, num_theta_bins=10, num
     
     return downsampled
 
-def lidar_feature(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, offset: float = 0.5) -> torch.Tensor:
+def lidar_feature(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, vis: bool = False) -> torch.Tensor:
     """Process lidar data to spherical points and downsample.
     
     Args:
@@ -547,7 +547,43 @@ def lidar_feature(env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg, offset: floa
     
     # Downsample the spherical points
     downsampled_sphere_points = downsample_spherical_points_vectorized(sphere_points, 15, 15)
+
+    if vis:
+        # Visualize the downsampled spherical points
+        visualize_sphere_points(downsampled_sphere_points)
+
     downsample_spherical_points_r = downsampled_sphere_points[:, :, 0]  # [num_envs, num_bins]
     r =  downsample_spherical_points_r.reshape(env.num_envs, -1)
-    torch.save(r, "tensor_lidar_spherical.pt")
     return r
+
+import numpy as np
+def visualize_sphere_points(sphere_points):
+    if not hasattr(visualize_sphere_points, "fig"):
+        plt.ion()  # Turn on interactive mode
+        visualize_sphere_points.fig = plt.figure()
+        visualize_sphere_points.ax = visualize_sphere_points.fig.add_subplot(111, projection='3d')
+        visualize_sphere_points.ax.set_title("Downsampled Spherical Points")
+        visualize_sphere_points.ax.set_xlabel("X")
+        visualize_sphere_points.ax.set_ylabel("Y")
+        visualize_sphere_points.ax.set_zlabel("Z")
+
+    ax = visualize_sphere_points.ax
+    ax.cla()  # Clear the previous plot
+
+    # Visualize downsampled spherical points
+    r = sphere_points[:, :, 0].cpu().numpy()  # [num_envs, num_bins]
+    theta = sphere_points[:, :, 1].cpu().numpy()  # [num_envs, num_bins]
+    phi = sphere_points[:, :, 2].cpu().numpy()  # [num_envs, num_bins]
+
+    # Convert spherical to Cartesian for visualization
+    x = (r * np.cos(phi) * np.cos(theta)).reshape(-1)
+    y = (r * np.cos(phi) * np.sin(theta)).reshape(-1)
+    z = (r * np.sin(phi)).reshape(-1)
+
+    ax.scatter(x, y, z, c=r.reshape(-1), cmap='viridis', s=5)
+    ax.set_title("Downsampled Spherical Points")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    plt.draw()
+    plt.pause(0.001)  # Pause to allow the figure to update
